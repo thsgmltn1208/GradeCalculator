@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>정확한 내신 등급 계산기</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📊</text></svg>">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css" />
+<script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                fontFamily: { sans: ['Pretendard', '-apple-system', 'system-ui', 'sans-serif'], mono: ['"IBM Plex Mono"','ui-monospace','monospace'] },
+                colors: {
+                    paper: { DEFAULT: '#F6F7F5' },
+                    ink: { DEFAULT: '#151B18', soft: '#525E58', faint: '#94A29B' },
+                    forest: { 50:'#EAF3EE',100:'#D3E6DA',200:'#AFD3BE',300:'#84BC9E',400:'#4E9A7C',500:'#237A62',600:'#186049',700:'#124A38',800:'#0D392B' },
+                    amber: { 50:'#FEF7E9',100:'#FCEACB',400:'#EA9E24',500:'#CB8215',600:'#A5680F' },
+                }
+            }
+        }
+    }
+</script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+    body { font-family: 'Pretendard', -apple-system, system-ui, 'Malgun Gothic', sans-serif; background: #F6F7F5; }
+    .input-field {
+        width: 100%; border: 1.5px solid #E1E7E2; background: #FBFCFB;
+        border-radius: 14px; padding: 13px 16px; font-size: 16px; font-weight: 600; transition: all .15s ease;
+    }
+    .input-field:focus { outline: none; border-color: #237A62; background: #fff; box-shadow: 0 0 0 4px rgba(35,122,98,0.10); }
+    .tab-btn { transition: all .15s cubic-bezier(.16,1,.3,1); }
+    .grade-badge {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 104px; height: 104px; border-radius: 999px; font-size: 40px; font-weight: 800;
+        box-shadow: 0 14px 30px -10px rgba(0,0,0,0.35);
+    }
+    .fade-in { animation: fadeIn .4s cubic-bezier(.16,1,.3,1); }
+    @keyframes fadeIn { from { opacity:0; transform: translateY(10px);} to { opacity:1; transform: translateY(0);} }
+    .marker { transition: left .5s cubic-bezier(.16,1,.3,1); }
+    .seg { transition: filter .15s ease; }
+</style>
+</head>
+<body class="min-h-screen flex justify-center px-4 py-8">
+<div class="w-full max-w-lg">
+
+    <div class="text-center mb-6">
+        <div class="inline-flex items-center justify-center w-14 h-14 bg-forest-600 rounded-2xl mb-3 shadow-lg shadow-forest-600/25">
+            <i class="fas fa-chart-simple text-white text-xl"></i>
+        </div>
+        <h1 class="text-2xl font-extrabold text-ink tracking-tight">정확한 내신 등급 계산기</h1>
+        <p class="text-ink-soft text-xs mt-1.5">등수와 수강자 수만 넣으면, 교육부 기준 반올림 규칙까지 그대로 적용해서 계산해요</p>
+    </div>
+
+    <!-- 입력 카드 -->
+    <div class="bg-white rounded-2xl shadow-lg shadow-ink/5 border border-forest-100 p-6">
+        <div class="grid grid-cols-2 gap-3">
+            <div>
+                <label class="block text-xs font-bold text-ink-soft mb-1.5">내 등수 (석차)</label>
+                <input id="input-rank" type="number" min="1" step="1" placeholder="예: 7" class="input-field font-mono">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-ink-soft mb-1.5">전체 수강자 수</label>
+                <input id="input-total" type="number" min="1" step="1" placeholder="예: 210" class="input-field font-mono">
+            </div>
+        </div>
+        <p class="text-[11px] text-ink-faint mt-3 leading-relaxed">성적표(나이스)에 "석차/수강자수"로 함께 적혀있어요. 예: <b>7/210</b></p>
+        <button id="btn-calc" class="w-full mt-4 py-3.5 bg-forest-600 hover:bg-forest-700 active:scale-[0.99] text-white font-bold rounded-xl transition">계산하기</button>
+    </div>
+
+    <!-- 결과 -->
+    <div id="result-wrap" class="hidden fade-in mt-4 space-y-3">
+
+        <div class="bg-forest-800 rounded-2xl p-6 text-white text-center shadow-xl shadow-forest-900/20 flex flex-col items-center">
+            <div id="grade-badge" class="grade-badge mb-4">-</div>
+            <div class="text-sm text-forest-200 font-semibold">예상 등급</div>
+            <div id="result-sub" class="text-xs text-forest-100/90 mt-2 font-mono"></div>
+        </div>
+
+        <!-- 등급 구간 시각화 바 -->
+        <div class="bg-white rounded-2xl shadow-lg shadow-ink/5 border border-forest-100 p-5">
+            <div class="text-xs font-bold text-ink-soft mb-3 flex items-center gap-1.5">
+                <i class="fas fa-ruler-horizontal text-forest-500"></i> 전체 등급 구간에서 내 위치
+            </div>
+            <div class="relative">
+                <div id="segment-bar" class="w-full h-8 rounded-full overflow-hidden flex shadow-inner"></div>
+                <div id="marker" class="marker absolute -top-1.5 flex flex-col items-center" style="left:0%;">
+                    <div class="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-ink"></div>
+                </div>
+            </div>
+            <div id="segment-legend" class="grid grid-cols-1 gap-1.5 mt-4 text-[11px]"></div>
+        </div>
+
+    </div>
+
+    <p id="error-msg" class="hidden text-center text-xs text-red-500 font-medium mt-3"></p>
+
+    <div class="mt-6 bg-amber-50 border border-amber-200/70 rounded-2xl p-4">
+        <div class="text-amber-700 text-xs font-bold flex items-center gap-1.5 mb-1.5">
+            <i class="fas fa-circle-info"></i> 계산 기준
+        </div>
+        <p class="text-[11px] text-amber-600 leading-relaxed">
+            등급별 커트라인 인원 = <b>수강자 수 × 누적 비율</b>을 <b>소수 첫째 자리에서 반올림</b>한 값이에요 (교육부 학업성적관리 시행지침 기준).
+            동점자가 등급 경계에 걸쳐있는 경우 학교에서 별도로 중간석차를 적용하므로, 이미 산출된 본인 석차를 기준으로 이 계산기를 쓰면 정확해요.
+        </p>
+    </div>
+
+</div>
+
+<script>
+    const GRADE_SYSTEM = {
+        ratios: [0.10, 0.34, 0.66, 0.90, 1.00],
+        colors: ['#186049', '#4E9A7C', '#EA9E24', '#E8791E', '#DC5B4E']
+    };
+
+    const resultWrap = document.getElementById('result-wrap');
+    const errorMsg = document.getElementById('error-msg');
+
+    // 교육부 기준: 등급별 누적 인원 = 수강자 수 × 누적비율, 소수 첫째 자리에서 반올림
+    const computeCumulativeCounts = (total, ratios) => {
+        const counts = ratios.map(r => Math.round(total * r));
+        // 반올림 과정에서 역전되지 않도록 보정 + 마지막 등급은 항상 전체 인원과 일치
+        for (let i = 1; i < counts.length; i++) {
+            if (counts[i] < counts[i - 1]) counts[i] = counts[i - 1];
+        }
+        counts[counts.length - 1] = total;
+        return counts;
+    };
+
+    const gradeFromCounts = (rank, counts) => {
+        for (let i = 0; i < counts.length; i++) {
+            if (rank <= counts[i]) return i + 1;
+        }
+        return counts.length;
+    };
+
+    const renderSegmentBar = (total, counts, ratios, colors, myGrade, rank) => {
+        const bar = document.getElementById('segment-bar');
+        const legend = document.getElementById('segment-legend');
+        bar.innerHTML = '';
+        legend.innerHTML = '';
+
+        let prevCount = 0;
+        counts.forEach((count, i) => {
+            const segCount = count - prevCount;
+            const widthPct = (segCount / total) * 100;
+            const isMine = (i + 1) === myGrade;
+
+            const seg = document.createElement('div');
+            seg.className = 'seg h-full flex items-center justify-center text-white text-[10px] font-extrabold';
+            seg.style.width = widthPct + '%';
+            seg.style.background = colors[i];
+            seg.style.opacity = isMine ? '1' : '0.55';
+            seg.style.outline = isMine ? '2px solid white' : 'none';
+            seg.style.outlineOffset = isMine ? '-2px' : '0';
+            if (widthPct > 6) seg.textContent = (i + 1);
+            bar.appendChild(seg);
+
+            const legendRow = document.createElement('div');
+            legendRow.className = 'flex items-center justify-between rounded-lg px-2.5 py-1.5 ' + (isMine ? 'bg-forest-50 font-bold text-forest-800' : 'text-ink-soft');
+            legendRow.innerHTML = `
+                <span class="flex items-center gap-1.5">
+                    <span class="w-2.5 h-2.5 rounded-full inline-block" style="background:${colors[i]}"></span>
+                    ${i + 1}등급
+                </span>
+                <span class="font-mono">${prevCount + 1}~${count}등 · 상위 ${ (ratios[i] * 100).toFixed(0) }%${isMine ? ' (나)' : ''}</span>
+            `;
+            legend.appendChild(legendRow);
+
+            prevCount = count;
+        });
+
+        const marker = document.getElementById('marker');
+        const markerLeft = Math.min(99, Math.max(1, (rank / total) * 100));
+        marker.style.left = markerLeft + '%';
+        marker.style.transform = 'translateX(-50%)';
+    };
+
+    const gradeColorHex = (grade, colors) => colors[grade - 1];
+
+    const showResult = (grade, rank, total, counts, ratios, colors) => {
+        const badge = document.getElementById('grade-badge');
+        badge.textContent = grade + '등급';
+        badge.style.background = gradeColorHex(grade, colors);
+        badge.style.color = '#fff';
+
+        const pctFromTop = (rank / total) * 100;
+        document.getElementById('result-sub').textContent = `${rank}등 / ${total}명 · 상위 ${pctFromTop.toFixed(1)}%`;
+
+        renderSegmentBar(total, counts, ratios, colors, grade, rank);
+
+        resultWrap.classList.remove('hidden');
+        errorMsg.classList.add('hidden');
+    };
+
+    const showError = (msg) => {
+        errorMsg.textContent = msg;
+        errorMsg.classList.remove('hidden');
+        resultWrap.classList.add('hidden');
+    };
+
+    document.getElementById('btn-calc').addEventListener('click', () => {
+        const rank = parseInt(document.getElementById('input-rank').value, 10);
+        const total = parseInt(document.getElementById('input-total').value, 10);
+
+        if (isNaN(rank) || isNaN(total) || rank < 1 || total < 1) {
+            showError('등수와 전체 수강자 수를 정확히 입력해주세요.');
+            return;
+        }
+        if (rank > total) {
+            showError('등수가 전체 수강자 수보다 클 수 없어요.');
+            return;
+        }
+
+        const { ratios, colors } = GRADE_SYSTEM;
+        const counts = computeCumulativeCounts(total, ratios);
+        const grade = gradeFromCounts(rank, counts);
+        showResult(grade, rank, total, counts, ratios, colors);
+    });
+
+    [document.getElementById('input-rank'), document.getElementById('input-total')].forEach(el => {
+        el.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') document.getElementById('btn-calc').click();
+        });
+    });
+</script>
+</body>
+</html>
